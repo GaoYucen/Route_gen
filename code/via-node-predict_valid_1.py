@@ -65,6 +65,7 @@ class QueryEncoder(nn.Module):
         self.bert = nn.Sequential(
             nn.Linear(4 * d, 256),
             nn.ReLU(),
+            nn.Dropout(0.3),  # 添加Dropout
             nn.Linear(256, m)
         )
 
@@ -74,13 +75,15 @@ class QueryEncoder(nn.Module):
         return query_emb
 
 # 修改分类头模块，移除Softmax
+# 修改ClassificationHead添加Dropout
 class ClassificationHead(nn.Module):
     def __init__(self, d, m):
         super(ClassificationHead, self).__init__()
         self.mlp = nn.Sequential(
             nn.Linear(m + d, 128),
             nn.ReLU(),
-            nn.Linear(128, 2)  # 输出logits
+            nn.Dropout(0.3),  # 添加Dropout
+            nn.Linear(128, 2)
         )
 
     def forward(self, query_emb, via_node_emb):
@@ -135,9 +138,14 @@ for i in range(len(traj_data)):
     traj_data[i] = (traj_data[i][1])
 
 # 取前100
-traj_data = traj_data[:100]
+traj_data = traj_data[:config.num_samples]
+
+# 分成训练集、验证集、测试集
 
 train_data = []
+val_data = []
+test_data = []
+
 for i in range(len(candidate_list)):
     s = traj_data[i][0]
     t = traj_data[i][-1]
@@ -158,7 +166,12 @@ for i in range(len(candidate_list)):
         label = 1 if on_traj_flag else 0
         via_nodes.append(via_node)
         labels.append(label)
-    train_data.append((s, t, s_partition_index, t_partition_index, via_nodes, labels))
+    if i < int(4/5*len(candidate_list)):
+        train_data.append((s, t, s_partition_index, t_partition_index, via_nodes, labels))
+    elif i < int(9/10*len(candidate_list)):
+        val_data.append((s, t, s_partition_index, t_partition_index, via_nodes, labels))
+    else:
+        test_data.append((s, t, s_partition_index, t_partition_index, via_nodes, labels))
 
 #%%
 # 初始化模型
@@ -166,14 +179,31 @@ model = ViaNodePredictionModel(d, m, num_nodes, num_partitions)
 
 # 定义损失函数和优化器
 criterion = nn.CrossEntropyLoss()
+# 修改优化器添加权重衰减
 optimizer = optim.Adam(model.parameters(), lr=0.001)
+# optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+# # 添加学习率调度器
+# scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+#     optimizer,
+#     mode='min',
+#     factor=0.1,
+#     patience=3,
+#     verbose=True
+# )
 
-train_flag = False
+train_flag = True
 
 if train_flag:
     # 训练循环修改
-    num_epochs = 50
+    num_epochs = 100
+    min_val_loss = float('inf')  # 初始化最小损失为正无穷
+    max_val_acc = 0  # 初始化最大准确率为0
+    best_model_state = None  # 用于存储最佳模型的状态
+    patience = 5  # 早停的耐心值，即允许损失值没有改善的最大轮数
+    no_improvement_count = 0  # 记录损失值没有改善的轮数
+
     for epoch in range(num_epochs):
+        model.train()  # 将模型设置为训练模式
         total_correct = 0
         total_instances = 0
         total_loss = 0
@@ -191,6 +221,7 @@ if train_flag:
             avg_loss = batch_loss / len(via_nodes)
             avg_loss.backward()
             optimizer.step()
+            # scheduler.step(avg_loss)  # 根据损失更新学习率
             total_loss += avg_loss.item()
 
             # 计算准确率
@@ -201,17 +232,66 @@ if train_flag:
                     prob = torch.softmax(out, dim=1)[0, 1].item()
                     probs.append(prob)
                 pred_idx = np.argmax(probs)
-                true_idx = labels.index(1) if 1 in labels else None
-                if true_idx is not None and pred_idx == true_idx:
+                # true_idx = labels.index(1) if 1 in labels else None
+                # if true_idx is not None and pred_idx == true_idx:
+                #     total_correct += 1
+                # total_instances += 1 if true_idx is not None else 0
+                if labels[pred_idx] == 1:
                     total_correct += 1
-                total_instances += 1 if true_idx is not None else 0
+                total_instances += 1
 
-        epoch_loss = total_loss / len(train_data)
-        acc = total_correct / total_instances if total_instances > 0 else 0
-        print(f'Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.4f}, Accuracy: {acc * 100:.2f}%')
+        train_epoch_loss = total_loss / len(train_data)
+        train_acc = total_correct / total_instances if total_instances > 0 else 0
 
-    # 保存模型
-    torch.save(model.state_dict(), 'param/chengdu/via_node_prediction_model_2.pth')
+        # 验证阶段
+        model.eval()  # 将模型设置为评估模式
+        total_val_correct = 0
+        total_val_instances = 0
+        total_val_loss = 0
+        with torch.no_grad():  # 关闭梯度计算
+            for data in val_data:  # 假设 val_data 是验证集数据
+                s, t, s_partition, t_partition, via_nodes, labels = data
+                batch_val_loss = 0
+                probs = []
+                for via_node, label in zip(via_nodes, labels):
+                    output = model(s, t, s_partition, t_partition, via_node)
+                    target = torch.tensor([label], dtype=torch.long)
+                    batch_val_loss += criterion(output, target)
+                    prob = torch.softmax(output, dim=1)[0, 1].item()
+                    probs.append(prob)
+
+                avg_val_loss = batch_val_loss / len(via_nodes)
+                total_val_loss += avg_val_loss.item()
+                pred_idx = np.argmax(probs)
+                if labels[pred_idx] == 1:
+                    total_val_correct += 1
+                total_val_instances += 1
+
+        val_epoch_loss = total_val_loss / len(val_data)
+        val_acc = total_val_correct / total_val_instances if total_val_instances > 0 else 0
+
+        print(f'Epoch {epoch + 1}/{num_epochs}, '
+              f'Train Loss: {train_epoch_loss:.4f}, Train Accuracy: {train_acc * 100:.2f}%, '
+              f'Val Loss: {val_epoch_loss:.4f}, Val Accuracy: {val_acc * 100:.2f}%')
+
+        # 检查当前验证集损失是否小于最小验证集损失
+        # if val_epoch_loss < min_val_loss:
+        #     min_val_loss = val_epoch_loss
+        if val_acc > max_val_acc:
+            max_val_acc = val_acc
+            best_model_state = model.state_dict()  # 保存当前模型的状态
+            no_improvement_count = 0  # 验证集损失有改善，重置计数
+        else:
+            no_improvement_count += 1  # 验证集损失没有改善，计数加1
+
+        # 检查是否触发早停机制
+        if no_improvement_count >= patience:
+            print(f'Early stopping triggered at epoch {epoch + 1}.')
+            break
+
+    # 保存损失最小的模型参数
+    if best_model_state is not None:
+        torch.save(best_model_state, 'param/chengdu/via_node_prediction_model_2.pth')
 
 #%% 测试模型
 # 读取模型
@@ -232,7 +312,7 @@ model.eval()  # 将模型设置为评估模式
 
 #%%
 test_data = []
-for i in range(len(candidate_list)):
+for i in range(int(len(candidate_list)*8/9), len(candidate_list)):
     s = traj_data[i][0]
     t = traj_data[i][-1]
     # 确认 s 和 t 所属的分区
@@ -284,7 +364,7 @@ with open('data/'+city_name+'/selected_points.pkl', 'wb') as f:
 
 #%% 判断selected_points在traj的比例
 selected_points_ratio = []
-for selected_point, traj in zip(selected_points, traj_data):
+for selected_point, traj in zip(selected_points, traj_data[int(len(candidate_list)*8/9):]):
     if selected_point in traj:
         selected_points_ratio.append(1)
     else:

@@ -138,3 +138,11 @@ https://www.doubao.com/thread/w1ef3698fcc61d947
 
 1. Data_preprocess_for_traj_small获取osmid数据
 2. Data_preprocess_for_scc获取强连通图
+
+
+## data preparation
+```
+cd Route_gen
+python code/preprocess/data_preprocess_for_traj_small.py --chengdu_data
+python code/preprocess/data_preprocess_for_scc.py --chengdu_data
+```

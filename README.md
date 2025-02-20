@@ -145,4 +145,16 @@ https://www.doubao.com/thread/w1ef3698fcc61d947
 cd Route_gen
 python code/preprocess/data_preprocess_for_traj_small.py --chengdu_data
 python code/preprocess/data_preprocess_for_scc.py --chengdu_data
+python code/preprocess/Node2Vec.py --chengdu_data
+python code/preprocess/data_preprocess_for_map.py --chengdu_data
+python code/CRP/CRP.py --chengdu_data
+python code/CRP/candidate_CRP.py --chengdu_data
 ```
+
+## train next-node prediction model
+```
+python code/model/train.py
+```
+
+## train via-node prediction model
+

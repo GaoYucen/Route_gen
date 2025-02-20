@@ -134,18 +134,16 @@ with open('data/'+city_name+'/graph_sc.pkl', 'rb') as f:
     G = pickle.load(f)
     f.close()
 
-# #%%
-# # CRP 预处理
-# partitions, boundary_nodes = crp_preprocessing(G)
-#
-# #%% 存储分区和边界节点
-# with open('data/'+city_name+'/partitions.pkl', 'wb') as f:
-#     pickle.dump(partitions, f)
-#     f.close()
-#
-# with open('data/'+city_name+'/boundary_nodes.pkl', 'wb') as f:
-#     pickle.dump(boundary_nodes, f)
-#     f.close()
+partitions, boundary_nodes = crp_preprocessing(G)
+
+#%% 存储分区和边界节点
+with open('data/'+city_name+'/partitions.pkl', 'wb') as f:
+    pickle.dump(partitions, f)
+    f.close()
+
+with open('data/'+city_name+'/boundary_nodes.pkl', 'wb') as f:
+    pickle.dump(boundary_nodes, f)
+    f.close()
 
 #%% 读取分区和边界节点
 with open('data/'+city_name+'/partitions.pkl', 'rb') as f:

@@ -157,4 +157,7 @@ python code/model/train.py
 ```
 
 ## train via-node prediction model
+```
+python code/via_node_predict_kai.py --num_samples 800 --test_sample_start_index 800 --test_sample_end_index 900
+```
 

@@ -2,6 +2,21 @@
 import pickle
 import networkx as nx
 
+import sys
+import os
+
+# 获取 code 文件夹的路径
+code_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# 将 code 文件夹路径添加到 sys.path
+sys.path.append(code_dir)
+
+from config import get_config
+
+config, _ = get_config()
+
+# 读取节点和边
+city_name = config.city
+
 with open('data/'+city_name+'/graph_sc.pkl', 'rb') as f:
     G = pickle.load(f)
     f.close()

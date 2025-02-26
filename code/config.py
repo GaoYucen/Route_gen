@@ -5,7 +5,12 @@ model_name = 'origin'
 # -*- coding: utf-8 -*-
 import argparse
 
-parser = argparse.ArgumentParser(description="Pytorch implementation of Road-SPDE")
+parser = argparse.ArgumentParser(description="Pytorch implementation of Route_gen")
+
+# Data
+parser.add_argument('--num_train_samples', default=9000, type=int, help='Number of train samples')
+parser.add_argument('--num_valid_samples', default=100, type=int, help='Number of validation samples')
+parser.add_argument('--num_test_samples', default=100, type=int, help='Number of test samples')
 
 # Model
 parser.add_argument('--num_samples', default=1000, type=int, help='Number of samples')

@@ -124,6 +124,11 @@ def load_data(city_name, config):
 
         datasets[name] = [d[1] for d in data if d[1][0] != d[1][-1]]
 
+    # save the data
+    for name in ['train', 'valid', 'test']:
+        with open(f'preprocessed/{city_name}/{name}_data_samples.pkl', 'wb') as f:
+            pickle.dump(datasets[name], f)
+
     return G, partitions, boundary_nodes, datasets
 
 

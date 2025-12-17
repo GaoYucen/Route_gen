@@ -2,7 +2,7 @@
 
 Environment:
 - Python 3.11
-- Pytorch 2.6.0
+- Pytorch 2.9.0
 
 ## Structure
 
@@ -58,9 +58,10 @@ The data can be downloaded at: [https://drive.google.com/file/d/1bICE26ndR2C29jk
 ### data preparation
 ```
 cd Route_gen
-python code/preprocess/data_preprocess_for_map.py
+python code/preprocess/data_preprocess_for_traj_small.py
+python code/preprocess/data_preprocess_for_scc.py
 python code/preprocess/Node2Vec.py
-python code/CRP/CRP.py
+python code/CRP/CRP_partition.py
 python code/CRP/candidate_CRP.py
 ```
 

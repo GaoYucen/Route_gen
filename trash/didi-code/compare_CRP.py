@@ -1,41 +1,27 @@
 import pickle
 import networkx as nx
 
-import sys
-import os
-
-# 获取 code 文件夹的路径
-code_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-# 将 code 文件夹路径添加到 sys.path
-sys.path.append(code_dir)
-
-from config import get_config
-
-config, _ = get_config()
-
-city_name = config.city
-
 #%% 读取graph_sc
 with open('data/'+city_name+'/graph_sc.pkl', 'rb') as f:
     G = pickle.load(f)
     f.close()
 
 #%% 读取selected_points.pkl
-with open('preprocessed/'+city_name+'/test_selected_points.pkl', 'rb') as f:
+with open('data/'+city_name+'/selected_points.pkl', 'rb') as f:
     selected_points = pickle.load(f)
     f.close()
 
 #%% 读取traj_data
-with open('preprocessed/'+city_name+'/test_data_samples.pkl', 'rb') as f:
+with open('data/'+city_name+'/test_data_small_sc.pkl', 'rb') as f:
     traj_data = pickle.load(f)
     f.close()
 
-# # 提取轨迹数据
-# for i in range(len(traj_data)):
-#     traj_data[i] = (traj_data[i][1])
+# 提取轨迹数据
+for i in range(len(traj_data)):
+    traj_data[i] = (traj_data[i][1])
 
-# # 取前100
-# traj_data = traj_data[800:900]
+# 取前100
+traj_data = traj_data[:100]
 
 #%% f1-score
 def f1_score(pred_path, orig_path):

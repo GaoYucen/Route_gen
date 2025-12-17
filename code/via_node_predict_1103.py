@@ -11,6 +11,41 @@ from config import get_config
 import matplotlib.pyplot as plt
 
 
+# 损失函数融合：MultiPositiveTop1Loss + RankingLoss
+class CombinedLoss(nn.Module):
+    def __init__(self, alpha=0.7, margin=1.0):
+        super().__init__()
+        self.top1 = MultiPositiveTop1Loss()
+        self.rank = RankingLoss(margin=margin)
+        self.alpha = alpha
+
+    def forward(self, outputs, labels):
+        return self.alpha * self.top1(outputs, labels) + (1 - self.alpha) * self.rank(outputs, labels)
+
+# 保留原有Top1Loss和MultiPositiveTop1Loss定义，方便调试和对比
+class Top1Loss(nn.Module):
+    def __init__(self):
+        super(Top1Loss, self).__init__()
+
+    def forward(self, outputs, labels):
+        best_idx = torch.argmax(outputs)
+        target = labels[best_idx]
+        loss = 1.0 - target
+        return loss
+
+class MultiPositiveTop1Loss(nn.Module):
+    def __init__(self):
+        super(MultiPositiveTop1Loss, self).__init__()
+
+    def forward(self, outputs, labels):
+        pos_mask = (labels == 1)
+        if pos_mask.sum() == 0:
+            return torch.tensor(0.0, device=outputs.device, requires_grad=True)
+        log_probs = F.log_softmax(outputs, dim=0)
+        loss = -log_probs[pos_mask].mean()
+        return loss
+
+
 class RankingLoss(nn.Module):
     def __init__(self, margin=1.0):
         super(RankingLoss, self).__init__()
@@ -169,20 +204,11 @@ class ViaNodePredictor(nn.Module):
 
 
 def train_model(model, train_loader, val_loader, device, num_epochs=100):
+
     optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01)
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
-    # # 修改学习率调度器
-    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    #     optimizer,
-    #     mode='max',
-    #     factor=0.5,
-    #     patience=5,
-    #     verbose=True
-    # )
-    # criterion = nn.BCEWithLogitsLoss()
-    # criterion = FocalLoss(gamma=2)
-    # 使用新的损失函数
-    criterion = RankingLoss(margin=1.0)
+    # 损失函数融合，alpha可调（如0.7更偏向样本级准确率，0.5均衡）
+    criterion = CombinedLoss(alpha=0.7, margin=1.0)
 
     best_val_acc = 0
     patience = 10
@@ -545,24 +571,24 @@ def main():
     node_list = sorted(list(data['graph'].nodes()))
     node_to_index = {node: idx for idx, node in enumerate(node_list)}
 
-    # # 训练模型
-    # print("Training model...")
-    # model, history = train_model(model, train_loader, val_loader, device, num_epochs=100)
+    # 训练模型
+    print("Training model...")
+    model, history = train_model(model, train_loader, val_loader, device, num_epochs=100)
 
-    # # 绘制训练历史
-    # plot_training_history(history, f'results/{config.city}_training_history.png')
+    # 绘制训练历史
+    plot_training_history(history, f'results/{config.city}_training_history.png')
 
-    # # 保存最终模型
-    # torch.save({
-    #     'model_state_dict': model.state_dict(),
-    #     'node_to_index': node_to_index,
-    #     'config': {
-    #         'd': d,
-    #         'm': m,
-    #         'num_nodes': num_nodes,
-    #         'num_partitions': num_partitions
-    #     }
-    # }, f'param/{config.city}_final_model.pth')
+    # 保存最终模型
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'node_to_index': node_to_index,
+        'config': {
+            'd': d,
+            'm': m,
+            'num_nodes': num_nodes,
+            'num_partitions': num_partitions
+        }
+    }, f'param/{config.city}_final_model.pth')
 
     # 加载保存的模型参数
     print("Loading model parameters...")
@@ -577,6 +603,7 @@ def main():
 
     # 评估测试集
     print("Evaluating on test set...")
+
     # 查一下test_candidate_list和test_on_traj_flag_list的长度是否和test_data一致
     print(f"Test data size: {len(data['test_data'])}")
     print(f"Test candidate list size: {len(data['test_candidate_list'])}")
@@ -590,6 +617,13 @@ def main():
             total_ones += 1
         total_flags += 1
     print(f"Total test samples with at least one positive candidate: {total_ones} out of {total_flags}")
+    # test_on_traj_flag_list中正样本的比例
+    total_flags = 0
+    total_ones = 0
+    for flag_list in data['test_on_traj_flag_list']:
+        total_ones += sum(flag_list)
+        total_flags += len(flag_list)
+    print(f"Proportion of positive candidates in test set: {total_ones}/{total_flags} = {total_ones/total_flags:.4f}")
 
     test_data = prepare_batch_data(
         data['test_data'],

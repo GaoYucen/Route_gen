@@ -131,6 +131,23 @@ def load_data(city_name, config):
 
     return G, partitions, boundary_nodes, datasets
 
+def statistics_on_traj_flag(data, name):
+    total_flags = 0
+    total_ones = 0
+    for flag_list in data[f'{name}_on_traj_flag_list']:
+        if any(flag_list):
+            total_ones += 1
+        total_flags += 1
+    print(f"Total {name} samples with at least one positive candidate: {total_ones} out of {total_flags}")
+
+    # 全部1的比例
+    total_flags = 0
+    total_ones = 0
+    for flag_list in data[f'{name}_on_traj_flag_list']:
+        total_ones += sum(flag_list)
+        total_flags += len(flag_list)
+    print(f"Proportion of positive candidates in {name} set: {total_ones}/{total_flags} = {total_ones/total_flags:.4f}")
+
 
 if __name__ == "__main__":
     config, _ = get_config()
@@ -145,3 +162,10 @@ if __name__ == "__main__":
     # Process all datasets
     for name, data in datasets.items():
         process_trajectory_data(data, G, partitions, boundary_nodes, name, config.city)
+
+    # Statistics
+    data = {}
+    for name in ['train', 'valid', 'test']:
+        with open(f'preprocessed/{config.city}/{name}_on_traj_flag_list.pkl', 'rb') as f:
+            data[f'{name}_on_traj_flag_list'] = pickle.load(f)
+            statistics_on_traj_flag(data, name)

@@ -1,2 +1,16 @@
 **/.DS_Store
 **/.idea/
+
+# Large Data Folders
+data/
+preprocessed/
+results/
+analyze/results/
+
+# Model Files
+param/
+*.pth
+
+# Python Cache
+__pycache__/
+*.pyc

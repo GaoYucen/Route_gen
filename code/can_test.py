@@ -20,9 +20,13 @@ with open('data/'+city_name+'/graph_sc.pkl', 'rb') as f:
     G = pickle.load(f)
     f.close()
 
-#%% 读取selected_points.pkl
-with open('preprocessed/'+city_name+'/test_selected_points.pkl', 'rb') as f:
-    selected_points = pickle.load(f)
+
+#%% 读取test_candidate_list和test_on_traj_flag_list
+with open('preprocessed/'+city_name+'/test_candidate_list.pkl', 'rb') as f:
+    test_candidate_list = pickle.load(f)
+    f.close()
+with open('preprocessed/'+city_name+'/test_on_traj_flag_list.pkl', 'rb') as f:
+    test_on_traj_flag_list = pickle.load(f)
     f.close()
 
 #%% 读取traj_data
@@ -47,16 +51,36 @@ def f1_score(pred_path, orig_path):
 #%% 对于每一个轨迹，对比Dijkstra和途经点CRP的f1-score
 CRP_f1_list = []
 Dijkstra_f1_list = []
+
 for idx in range(len(traj_data)):
     traj = traj_data[idx]
     source = traj[0]
     target = traj[-1]
-    waypoint = selected_points[idx]
-    # 最短路和最短路长度
+    # 获取所有途经点（test_candidate_list中test_on_traj_flag_list为1的位置）
+    candidate_points = test_candidate_list[idx]
+    flag_list = test_on_traj_flag_list[idx]
+    waypoints = [pt for pt, flag in zip(candidate_points, flag_list) if flag == 1]
+
+    # 筛选出len(waypoints) > 0的情况，对此进行统计，否则跳过
+    if len(waypoints) == 0:
+        continue
+
     shortest_path = nx.shortest_path(G, source, target, weight='weight')
-    CRP_path_1 = nx.shortest_path(G, source, waypoint, weight='weight')
-    CRP_path_2 = nx.shortest_path(G, waypoint, target, weight='weight')
-    CRP_path = CRP_path_1 + CRP_path_2[1:]
+
+    # 如果没有途经点，则只算Dijkstra
+    if len(waypoints) == 0:
+        # 取candidate_list中的第一个作为途经点
+        waypoint = candidate_points[0]
+        CRP_path_1 = nx.shortest_path(G, source, waypoint, weight='weight')
+        CRP_path_2 = nx.shortest_path(G, waypoint, target, weight='weight')
+        CRP_path = CRP_path_1 + CRP_path_2[1:]
+    else:
+        # 多途经点时，只取第一个
+        waypoint = waypoints[0]
+        CRP_path_1 = nx.shortest_path(G, source, waypoint, weight='weight')
+        CRP_path_2 = nx.shortest_path(G, waypoint, target, weight='weight')
+        CRP_path = CRP_path_1 + CRP_path_2[1:]
+    
     CRP_f1 = f1_score(CRP_path, traj)
     Dijkstra_f1 = f1_score(shortest_path, traj)
     CRP_f1_list.append(CRP_f1)
